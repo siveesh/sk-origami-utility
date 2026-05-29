@@ -28,3 +28,6 @@
 - Added a File Associations Settings button that uses LaunchServices to set SK Origami as the per-user default viewer for supported archive extensions.
 - Added reusable app bundle staging and release packaging scripts for ZIP, DMG, and PKG distribution artifacts.
 - Updated `README.md` with local install, package release, bundled helper, and notarization notes.
+- Installed a validated copy of `SK Origami.app` into `/Applications`.
+- Created release artifacts in `dist/releases`: ZIP, DMG, PKG, and SHA256SUMS for version `0.1.0`.
+- Uploaded the project to GitHub at `https://github.com/siveesh/sk-origami-utility` and published release `v0.1.0`.
