@@ -1,0 +1,87 @@
+{
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "spdxVersion": "SPDX-2.3",
+  "name": "SBOM-SPDX-unar-1.10.8",
+  "creationInfo": {
+    "created": "2026-05-29T10:50:52Z",
+    "creators": [
+      "Tool: https://github.com/Homebrew/brew@5.1.14"
+    ]
+  },
+  "dataLicense": "CC0-1.0",
+  "documentNamespace": "https://formulae.brew.sh/spdx/unar-1.10.8.json",
+  "documentDescribes": [
+    "SPDXRef-Archive-unar-src",
+    "SPDXRef-Compiler",
+    "SPDXRef-Bottle-unar"
+  ],
+  "files": [],
+  "packages": [
+    {
+      "SPDXID": "SPDXRef-Archive-unar-src",
+      "name": "unar",
+      "versionInfo": "1.10.8",
+      "filesAnalyzed": false,
+      "licenseDeclared": "NOASSERTION",
+      "builtDate": "2023-10-10T20:44:22Z",
+      "licenseConcluded": "LGPL-2.1-or-later",
+      "downloadLocation": "https://github.com/MacPaw/XADMaster/archive/refs/tags/v1.10.8.tar.gz",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [],
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "652953d7988b3c33f4f52b61c357afd1a7c2fc170e5e6e2219f4432b0c4cd39f"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Compiler",
+      "name": "clang",
+      "versionInfo": "26.5",
+      "filesAnalyzed": false,
+      "licenseDeclared": "NOASSERTION",
+      "licenseConcluded": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "downloadLocation": "NOASSERTION",
+      "checksums": [],
+      "externalRefs": []
+    },
+    {
+      "SPDXID": "SPDXRef-Bottle-unar",
+      "name": "unar",
+      "versionInfo": "1.10.8",
+      "filesAnalyzed": false,
+      "licenseDeclared": "NOASSERTION",
+      "builtDate": "2023-10-10T20:44:22Z",
+      "licenseConcluded": "LGPL-2.1-or-later",
+      "downloadLocation": "https://ghcr.io/v2/homebrew/core/unar/blobs/sha256:0ef068932336d86ad68784341497223c5d17d6e56ed564a698d6686031ff97fa",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:brew/homebrew/core/unar@1.10.8",
+          "referenceType": "purl"
+        }
+      ],
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "0ef068932336d86ad68784341497223c5d17d6e56ed564a698d6686031ff97fa"
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-File-unar",
+      "relationshipType": "PACKAGE_OF",
+      "relatedSpdxElement": "SPDXRef-Archive-unar-src"
+    },
+    {
+      "spdxElementId": "SPDXRef-Compiler",
+      "relationshipType": "BUILD_TOOL_OF",
+      "relatedSpdxElement": "SPDXRef-Package-unar-src"
+    }
+  ]
+}

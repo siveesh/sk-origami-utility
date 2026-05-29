@@ -1,0 +1,87 @@
+{
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "spdxVersion": "SPDX-2.3",
+  "name": "SBOM-SPDX-sevenzip-26.01",
+  "creationInfo": {
+    "created": "2026-05-29T10:50:52Z",
+    "creators": [
+      "Tool: https://github.com/Homebrew/brew@5.1.14"
+    ]
+  },
+  "dataLicense": "CC0-1.0",
+  "documentNamespace": "https://formulae.brew.sh/spdx/sevenzip-26.01.json",
+  "documentDescribes": [
+    "SPDXRef-Archive-sevenzip-src",
+    "SPDXRef-Compiler",
+    "SPDXRef-Bottle-sevenzip"
+  ],
+  "files": [],
+  "packages": [
+    {
+      "SPDXID": "SPDXRef-Archive-sevenzip-src",
+      "name": "sevenzip",
+      "versionInfo": "26.01",
+      "filesAnalyzed": false,
+      "licenseDeclared": "NOASSERTION",
+      "builtDate": "2026-04-27T14:00:00Z",
+      "licenseConcluded": "LGPL-2.1-or-later AND BSD-3-Clause",
+      "downloadLocation": "https://7-zip.org/a/7z2601-src.tar.xz",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [],
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "b2389e0e930b2f9a348cf0fe7d9870a46482a8ec044ee0bdf42e2136db31c3d6"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Compiler",
+      "name": "clang",
+      "versionInfo": "26.5",
+      "filesAnalyzed": false,
+      "licenseDeclared": "NOASSERTION",
+      "licenseConcluded": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "downloadLocation": "NOASSERTION",
+      "checksums": [],
+      "externalRefs": []
+    },
+    {
+      "SPDXID": "SPDXRef-Bottle-sevenzip",
+      "name": "sevenzip",
+      "versionInfo": "26.01",
+      "filesAnalyzed": false,
+      "licenseDeclared": "NOASSERTION",
+      "builtDate": "2026-04-27T14:00:00Z",
+      "licenseConcluded": "LGPL-2.1-or-later AND BSD-3-Clause",
+      "downloadLocation": "https://ghcr.io/v2/homebrew/core/sevenzip/blobs/sha256:6f0c24927488f6cff80f71a4127c89c967d70700002df0ae7dd8248bc77167a4",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:brew/homebrew/core/sevenzip@26.01",
+          "referenceType": "purl"
+        }
+      ],
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "6f0c24927488f6cff80f71a4127c89c967d70700002df0ae7dd8248bc77167a4"
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-File-sevenzip",
+      "relationshipType": "PACKAGE_OF",
+      "relatedSpdxElement": "SPDXRef-Archive-sevenzip-src"
+    },
+    {
+      "spdxElementId": "SPDXRef-Compiler",
+      "relationshipType": "BUILD_TOOL_OF",
+      "relatedSpdxElement": "SPDXRef-Package-sevenzip-src"
+    }
+  ]
+}

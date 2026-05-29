@@ -1,0 +1,87 @@
+{
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "spdxVersion": "SPDX-2.3",
+  "name": "SBOM-SPDX-tnef-1.4.18",
+  "creationInfo": {
+    "created": "2026-05-29T10:50:52Z",
+    "creators": [
+      "Tool: https://github.com/Homebrew/brew@5.1.14"
+    ]
+  },
+  "dataLicense": "CC0-1.0",
+  "documentNamespace": "https://formulae.brew.sh/spdx/tnef-1.4.18.json",
+  "documentDescribes": [
+    "SPDXRef-Archive-tnef-src",
+    "SPDXRef-Compiler",
+    "SPDXRef-Bottle-tnef"
+  ],
+  "files": [],
+  "packages": [
+    {
+      "SPDXID": "SPDXRef-Archive-tnef-src",
+      "name": "tnef",
+      "versionInfo": "1.4.18",
+      "filesAnalyzed": false,
+      "licenseDeclared": "NOASSERTION",
+      "builtDate": "2019-11-10T23:57:12Z",
+      "licenseConcluded": "GPL-2.0-or-later",
+      "downloadLocation": "https://github.com/verdammelt/tnef/archive/refs/tags/1.4.18.tar.gz",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [],
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "fa56dd08649f51b173017911cae277dc4b2c98211721c2a60708bf1d28839922"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Compiler",
+      "name": "clang",
+      "versionInfo": "26.5",
+      "filesAnalyzed": false,
+      "licenseDeclared": "NOASSERTION",
+      "licenseConcluded": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "downloadLocation": "NOASSERTION",
+      "checksums": [],
+      "externalRefs": []
+    },
+    {
+      "SPDXID": "SPDXRef-Bottle-tnef",
+      "name": "tnef",
+      "versionInfo": "1.4.18",
+      "filesAnalyzed": false,
+      "licenseDeclared": "NOASSERTION",
+      "builtDate": "2019-11-10T23:57:12Z",
+      "licenseConcluded": "GPL-2.0-or-later",
+      "downloadLocation": "https://ghcr.io/v2/homebrew/core/tnef/blobs/sha256:44529baf2a4c808692492827a1e241d50d4664afb347e2c9efbd174459e77dfa",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:brew/homebrew/core/tnef@1.4.18",
+          "referenceType": "purl"
+        }
+      ],
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "44529baf2a4c808692492827a1e241d50d4664afb347e2c9efbd174459e77dfa"
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-File-tnef",
+      "relationshipType": "PACKAGE_OF",
+      "relatedSpdxElement": "SPDXRef-Archive-tnef-src"
+    },
+    {
+      "spdxElementId": "SPDXRef-Compiler",
+      "relationshipType": "BUILD_TOOL_OF",
+      "relatedSpdxElement": "SPDXRef-Package-tnef-src"
+    }
+  ]
+}
