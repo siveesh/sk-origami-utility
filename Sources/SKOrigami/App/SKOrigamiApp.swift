@@ -20,9 +20,14 @@ struct SKOrigamiApp: App {
                 .keyboardShortcut("o")
 
                 Button("Create Archive...") {
-                    workspace.isShowingCreateSheet = true
+                    workspace.presentCreateArchive()
                 }
                 .keyboardShortcut("n")
+
+                Button("Add Folders for Disk Image...") {
+                    workspace.presentFolderImagePanel()
+                }
+                .keyboardShortcut("i")
             }
         }
 
@@ -38,6 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
+        NSApplication.shared.servicesProvider = self
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -46,6 +52,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             openHandler(urls)
         } else {
             Self.pendingOpenURLs.append(contentsOf: urls)
+        }
+    }
+
+    @objc func handleFolders(_ pasteboard: NSPasteboard, userData: String, error: AutoreleasingUnsafeMutablePointer<NSString?>) {
+        var urls: [URL] = []
+
+        if let paths = pasteboard.propertyList(
+            forType: NSPasteboard.PasteboardType("NSFilenamesPboardType")
+        ) as? [String] {
+            urls = paths.map { URL(fileURLWithPath: $0) }
+        }
+
+        if urls.isEmpty,
+           let pastedURLs = pasteboard.readObjects(
+               forClasses: [NSURL.self],
+               options: [.urlReadingFileURLsOnly: true]
+           ) as? [URL] {
+            urls = pastedURLs
+        }
+
+        let folders = urls.filter(\.isExistingDirectory)
+        guard !folders.isEmpty else { return }
+
+        if let openHandler = Self.openHandler {
+            openHandler(folders)
+        } else {
+            Self.pendingOpenURLs.append(contentsOf: folders)
         }
     }
 

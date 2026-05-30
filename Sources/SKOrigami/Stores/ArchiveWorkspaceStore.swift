@@ -12,11 +12,16 @@ final class ArchiveWorkspaceStore: ObservableObject {
     @Published var isShowingCreateSheet = false
     @Published var isShowingExtractSheet = false
     @Published var isShowingPasswordVault = false
+    @Published var diskImageJobs: [DiskImageJob] = []
     @Published var passwordRecords: [PasswordRecord] = []
     @Published var lastError: String?
+    @Published var dropBehavior: DropBehavior = .createDiskImage
+    @Published var pendingCreateSources: [URL] = []
 
     let archiveService = ArchiveService()
+    let diskImageService = DiskImageService()
     private let passwordVault = PasswordVault()
+    private var isCreatingDiskImage = false
 
     var selectedArchive: ArchiveDocument? {
         archives.first { $0.id == selectedArchiveID }
@@ -35,13 +40,13 @@ final class ArchiveWorkspaceStore: ObservableObject {
         registerDefaultPreferences()
         AppDelegate.openHandler = { [weak self] urls in
             Task { @MainActor in
-                self?.openArchives(urls)
+                self?.handleIncomingURLs(urls)
             }
         }
         if !AppDelegate.pendingOpenURLs.isEmpty {
             let urls = AppDelegate.pendingOpenURLs
             AppDelegate.pendingOpenURLs.removeAll()
-            openArchives(urls)
+            handleIncomingURLs(urls)
         }
     }
 
@@ -50,11 +55,13 @@ final class ArchiveWorkspaceStore: ObservableObject {
             PreferenceKeys.defaultExtractSameLocation: true,
             PreferenceKeys.filterUnnecessaryFiles: true,
             PreferenceKeys.moveArchiveToTrashAfterExtraction: false,
+            PreferenceKeys.moveFolderToTrashAfterDiskImageCreation: false,
             PreferenceKeys.quitAfterLastWindowCloses: false
         ])
     }
 
     func presentOpenPanel() {
+        setDropBehavior(.openArchives)
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
         panel.canChooseFiles = true
@@ -65,12 +72,164 @@ final class ArchiveWorkspaceStore: ObservableObject {
         }
     }
 
+    func setDropBehavior(_ behavior: DropBehavior) {
+        dropBehavior = behavior
+        jobMessage = behavior.statusMessage
+    }
+
     func openArchives(_ urls: [URL]) {
         for url in urls {
             let document = ArchiveDocument(url: url, format: ArchiveFormat.infer(from: url), status: .loading)
             archives.insert(document, at: 0)
             selectedArchiveID = document.id
             loadEntries(for: document.id)
+        }
+    }
+
+    func handleIncomingURLs(_ urls: [URL]) {
+        let folders = urls.filter(\.isExistingDirectory)
+        let files = urls.filter { !$0.isExistingDirectory }
+
+        switch dropBehavior {
+        case .openArchives:
+            if !files.isEmpty {
+                openArchives(files)
+            }
+            if !folders.isEmpty {
+                lastError = "Open mode accepts archive files. Switch to Disk Image or Create mode for folders."
+            }
+        case .createArchive:
+            presentCreateArchive(sources: urls)
+        case .createDiskImage:
+            guard !folders.isEmpty else {
+                lastError = "Disk Image mode accepts folders. Switch to Open or Create mode for files."
+                return
+            }
+            stageDiskImageFolders(folders)
+            if !files.isEmpty {
+                lastError = "Disk Image mode ignored file drops. Switch to Create mode to archive files."
+            }
+        case .extractArchive:
+            guard let archiveURL = files.first else {
+                lastError = "Extract mode accepts archive files."
+                return
+            }
+            openArchives([archiveURL])
+            isShowingExtractSheet = true
+        }
+    }
+
+    func presentCreateArchive(sources: [URL] = []) {
+        setDropBehavior(.createArchive)
+        pendingCreateSources = sources
+        isShowingCreateSheet = true
+    }
+
+    func consumePendingCreateSources() -> [URL] {
+        let sources = pendingCreateSources
+        pendingCreateSources = []
+        return sources
+    }
+
+    func presentFolderImagePanel() {
+        setDropBehavior(.createDiskImage)
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.title = "Choose Folders"
+        panel.prompt = "Add"
+        if panel.runModal() == .OK {
+            stageDiskImageFolders(panel.urls)
+        }
+    }
+
+    func stageDiskImageFolders(_ urls: [URL]) {
+        for url in urls where url.isExistingDirectory {
+            let job = DiskImageJob(
+                sourceURL: url,
+                outputName: DiskImageService.sanitize(url.lastPathComponent),
+                format: .dmg
+            )
+            diskImageJobs.insert(job, at: 0)
+            selectedArchiveID = nil
+            jobMessage = "Folder staged for disk image creation."
+
+            Task {
+                let detected = await Task.detached(priority: .utility) {
+                    DiskImageService.detectFormat(for: url)
+                }.value
+                job.format = detected
+                job.windowsContent = detected == .iso
+                job.note = detected == .iso ? "Windows content detected" : ""
+            }
+        }
+    }
+
+    func removeDiskImageJob(_ job: DiskImageJob) {
+        diskImageJobs.removeAll { $0.id == job.id && $0.state == .staged }
+    }
+
+    func setAllStagedDiskImageJobs(to format: DiskImageFormat) {
+        diskImageJobs
+            .filter { $0.state == .staged }
+            .forEach { job in
+                job.format = format
+                job.note = format == .iso && job.windowsContent ? "Windows content detected" : ""
+            }
+    }
+
+    func startDiskImageJobs() {
+        let staged = diskImageJobs.filter { $0.state == .staged }
+        guard !staged.isEmpty else { return }
+
+        staged.forEach {
+            $0.outputName = DiskImageService.sanitize($0.outputName)
+            $0.state = .queued
+            $0.note = ""
+        }
+        processNextDiskImageJob()
+    }
+
+    func clearFinishedDiskImageJobs() {
+        diskImageJobs.removeAll { job in
+            switch job.state {
+            case .done, .failed:
+                true
+            default:
+                false
+            }
+        }
+    }
+
+    private func processNextDiskImageJob() {
+        guard !isCreatingDiskImage, let job = diskImageJobs.first(where: { $0.state == .queued }) else { return }
+        isCreatingDiskImage = true
+        isWorking = true
+        job.state = .creating
+        jobMessage = "Creating \(job.outputFileName)..."
+
+        Task {
+            do {
+                let url = try await diskImageService.createDiskImage(CreateDiskImageRequest(
+                    sourceFolder: job.sourceURL,
+                    outputName: job.outputName,
+                    format: job.format,
+                    moveSourceFolderToTrash: UserDefaults.standard.bool(forKey: PreferenceKeys.moveFolderToTrashAfterDiskImageCreation)
+                ))
+                job.outputURL = url
+                job.state = .done
+                job.note = ""
+                jobMessage = "Created \(url.lastPathComponent)."
+            } catch {
+                job.state = .failed(error.localizedDescription)
+                job.note = error.localizedDescription
+                lastError = error.localizedDescription
+                jobMessage = "Could not create disk image."
+            }
+            isCreatingDiskImage = false
+            isWorking = diskImageJobs.contains { $0.state == .queued || $0.state == .creating }
+            processNextDiskImageJob()
         }
     }
 

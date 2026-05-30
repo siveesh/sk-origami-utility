@@ -4,8 +4,10 @@ struct SettingsView: View {
     @AppStorage(PreferenceKeys.defaultExtractSameLocation) private var sameLocation = true
     @AppStorage(PreferenceKeys.filterUnnecessaryFiles) private var filterUnnecessaryFiles = true
     @AppStorage(PreferenceKeys.moveArchiveToTrashAfterExtraction) private var moveArchiveToTrash = false
+    @AppStorage(PreferenceKeys.moveFolderToTrashAfterDiskImageCreation) private var moveFolderToTrash = false
     @AppStorage(PreferenceKeys.quitAfterLastWindowCloses) private var quitAfterLastWindowCloses = false
     private let archiveService = ArchiveService()
+    private let diskImageService = DiskImageService()
 
     var body: some View {
         TabView {
@@ -14,6 +16,10 @@ struct SettingsView: View {
                     Toggle("Same Location as Archive", isOn: $sameLocation)
                     Toggle("Filter .DS_Store and __MACOSX", isOn: $filterUnnecessaryFiles)
                     Toggle("Move Archive to Trash", isOn: $moveArchiveToTrash)
+                }
+
+                Section("Disk Images") {
+                    Toggle("Move Source Folder to Trash", isOn: $moveFolderToTrash)
                 }
 
                 Section("Windows") {
@@ -25,9 +31,14 @@ struct SettingsView: View {
                 Label("General", systemImage: "gearshape")
             }
 
-            FileAssociationsSettingsView(archiveService: archiveService)
+            FileAssociationsSettingsView()
                 .tabItem {
                     Label("File Associations", systemImage: "doc.badge.gearshape")
+                }
+
+            LocalToolsSettingsView(archiveService: archiveService, diskImageService: diskImageService)
+                .tabItem {
+                    Label("Local Tools", systemImage: "wrench.and.screwdriver")
                 }
         }
         .padding()
@@ -36,7 +47,6 @@ struct SettingsView: View {
 }
 
 struct FileAssociationsSettingsView: View {
-    let archiveService: ArchiveService
     private let fileAssociationService = FileAssociationService()
     @State private var associationMessage = ""
 
@@ -76,25 +86,6 @@ struct FileAssociationsSettingsView: View {
                 TableColumn("Support") { format in
                     Text(supportSummary(for: format))
                         .foregroundStyle(.secondary)
-                }
-            }
-
-            Divider()
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Local Tools")
-                    .font(.headline)
-                Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
-                    ForEach(archiveService.tools, id: \.name) { tool in
-                        GridRow {
-                            Image(systemName: tool.isAvailable ? "checkmark.circle.fill" : "minus.circle")
-                                .foregroundStyle(tool.isAvailable ? .green : .secondary)
-                            Text(tool.name)
-                            Text(tool.displayLocation)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-                    }
                 }
             }
         }
@@ -137,5 +128,31 @@ struct FileAssociationsSettingsView: View {
         default:
             "archivebox"
         }
+    }
+}
+
+struct LocalToolsSettingsView: View {
+    let archiveService: ArchiveService
+    let diskImageService: DiskImageService
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Local Tools")
+                .font(.headline)
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
+                ForEach(archiveService.tools + [diskImageService.toolAvailability], id: \.name) { tool in
+                    GridRow {
+                        Image(systemName: tool.isAvailable ? "checkmark.circle.fill" : "minus.circle")
+                            .foregroundStyle(tool.isAvailable ? .green : .secondary)
+                        Text(tool.name)
+                        Text(tool.displayLocation)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+            }
+            Spacer()
+        }
+        .padding(.top, 8)
     }
 }

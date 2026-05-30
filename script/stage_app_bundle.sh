@@ -71,6 +71,38 @@ cat >"$INFO_PLIST" <<PLIST
       <key>LSHandlerRank</key>
       <string>Owner</string>
     </dict>
+    <dict>
+      <key>CFBundleTypeIconFile</key>
+      <string>AppIcon</string>
+      <key>CFBundleTypeName</key>
+      <string>Folder</string>
+      <key>CFBundleTypeRole</key>
+      <string>Viewer</string>
+      <key>LSHandlerRank</key>
+      <string>Alternate</string>
+      <key>LSItemContentTypes</key>
+      <array>
+        <string>public.folder</string>
+      </array>
+    </dict>
+  </array>
+  <key>NSServices</key>
+  <array>
+    <dict>
+      <key>NSMenuItem</key>
+      <dict>
+        <key>default</key>
+        <string>Create Disk Image with SK Origami</string>
+      </dict>
+      <key>NSMessage</key>
+      <string>handleFolders</string>
+      <key>NSPortName</key>
+      <string>$APP_NAME</string>
+      <key>NSSendTypes</key>
+      <array>
+        <string>NSFilenamesPboardType</string>
+      </array>
+    </dict>
   </array>
   <key>CFBundleExecutable</key>
   <string>$APP_NAME</string>
@@ -78,6 +110,8 @@ cat >"$INFO_PLIST" <<PLIST
   <string>AppIcon</string>
   <key>CFBundleIdentifier</key>
   <string>$BUNDLE_ID</string>
+  <key>LSApplicationCategoryType</key>
+  <string>public.app-category.utilities</string>
   <key>CFBundleName</key>
   <string>$APP_NAME</string>
   <key>CFBundlePackageType</key>

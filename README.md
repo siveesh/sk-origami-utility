@@ -1,10 +1,14 @@
 # SK Origami
 
-SK Origami is a macOS SwiftUI archive utility for opening, inspecting, creating, modifying, and extracting common archive formats.
+SK Origami is a macOS SwiftUI utility for opening, inspecting, creating, modifying, and extracting common archive formats. It can also create DMG and ISO disk images from folders.
 
 ## Features
 
-- Drag archives into the main window.
+- Choose a toolbar mode to control drag-and-drop behavior.
+- Drop archive files to open or extract them.
+- Drop files or folders to prefill a new archive.
+- Drop folders to stage DMG or ISO disk image creation.
+- Default folders containing `.exe` or `.msi` files to ISO; default other folders to DMG.
 - View archive contents without extracting.
 - Search archive entries.
 - Extract an entire archive or selected entries.
@@ -13,16 +17,30 @@ SK Origami is a macOS SwiftUI archive utility for opening, inspecting, creating,
 - Extract ZIP, JAR, APK, DRFX, TAR variants, Gzip, 7z, RAR/RAR5, and TNEF/winmail.dat when compatible local tools are installed.
 - Uses bundled helper tools first, so 7z/RAR/TNEF extraction works without requiring the user to install Homebrew tools separately on supported macOS ARM builds.
 - Opens associated archive files from Finder double-clicks.
+- Accepts folders through Finder Open With, Dock drops, and the **Create Disk Image with SK Origami** Finder Service.
 - Store archive passwords for later reference.
 - Filter `.DS_Store` and `__MACOSX`.
 - Move archives to Trash after successful extraction.
+- Move source folders to Trash after successful disk image creation when enabled.
 - Use system appearance automatically.
+
+## Drag and Drop Modes
+
+The main toolbar controls what SK Origami does with dropped items:
+
+- **Open**: open dropped archive files.
+- **Create**: add dropped files or folders to a new archive.
+- **Image**: stage dropped folders for DMG or ISO creation.
+- **Extract**: open a dropped archive and show extraction options.
+
+Each toolbar icon has a hover tooltip. The password-key icon opens saved archive passwords and does not change drop behavior.
 
 ## Requirements
 
 - macOS 14 or later.
 - Swift 5.9 or later.
 - RAR/RAR5 extraction is handled by bundled `7zz`/`unar` helpers. RAR creation is intentionally not included.
+- DMG/ISO creation uses macOS `/usr/bin/hdiutil`.
 
 ## Build and Run
 
@@ -44,14 +62,14 @@ After installation, open `SK Origami > Settings > File Associations` and use **S
 ## Package Release
 
 ```bash
-./script/package_release.sh 0.1.0
+./script/package_release.sh 0.2.0
 ```
 
 Release artifacts are written to `dist/releases`:
 
-- `SK-Origami-0.1.0-macOS-arm64.zip`
-- `SK-Origami-0.1.0-macOS-arm64.dmg`
-- `SK-Origami-0.1.0-macOS-arm64.pkg`
+- `SK-Origami-0.2.0-macOS-arm64.zip`
+- `SK-Origami-0.2.0-macOS-arm64.dmg`
+- `SK-Origami-0.2.0-macOS-arm64.pkg`
 - `SHA256SUMS.txt`
 
 The release workflow creates a SwiftPM release build, stages `SK Origami.app`, copies bundled helper tools into the app bundle, verifies no helper links back to the project folder, applies ad-hoc signing, and creates ZIP, DMG, and PKG artifacts. Notarization is not included because it requires Apple Developer signing and notary credentials.

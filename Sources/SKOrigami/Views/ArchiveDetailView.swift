@@ -14,8 +14,15 @@ struct ArchiveDetailView: View {
                 StatusBar()
                     .environmentObject(workspace)
             } else {
-                DropLandingView()
-                    .environmentObject(workspace)
+                VStack(spacing: 0) {
+                    DropLandingView()
+                        .environmentObject(workspace)
+                    if !workspace.diskImageJobs.isEmpty {
+                        Divider()
+                        DiskImageQueueView()
+                            .environmentObject(workspace)
+                    }
+                }
             }
         }
         .searchable(text: $workspace.searchText, placement: .toolbar, prompt: "Search archive")
@@ -38,10 +45,12 @@ struct ArchiveDetailView: View {
             }
             Spacer()
             Button {
+                workspace.setDropBehavior(.extractArchive)
                 workspace.isShowingExtractSheet = true
             } label: {
                 Label("Extract", systemImage: "square.and.arrow.down")
             }
+            .help("Extract this archive. Drops open an archive and show extraction options.")
             Button {
                 chooseFilesToAdd()
             } label: {
@@ -97,23 +106,46 @@ struct DropLandingView: View {
             Image(systemName: "arrow.down.doc")
                 .font(.system(size: 56))
                 .foregroundStyle(.secondary)
-            Text("Drop Archives")
+            Text(dropTitle)
                 .font(.largeTitle)
                 .fontWeight(.semibold)
+            Text(workspace.dropBehavior.statusMessage)
+                .foregroundStyle(.secondary)
             HStack(spacing: 12) {
                 Button {
                     workspace.presentOpenPanel()
                 } label: {
                     Label("Open", systemImage: "folder")
                 }
+                .help("Open archives. Drops open archive files.")
                 Button {
-                    workspace.isShowingCreateSheet = true
+                    workspace.presentCreateArchive()
                 } label: {
                     Label("Create", systemImage: "archivebox")
                 }
+                .help("Create an archive. Drops add files or folders to a new archive.")
+                Button {
+                    workspace.presentFolderImagePanel()
+                } label: {
+                    Label("Add Folders", systemImage: "opticaldiscdrive")
+                }
+                .help("Create a DMG or ISO. Drops stage folders for disk image creation.")
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var dropTitle: String {
+        switch workspace.dropBehavior {
+        case .openArchives:
+            "Drop Archives"
+        case .createArchive:
+            "Drop to Archive"
+        case .createDiskImage:
+            "Drop Folders"
+        case .extractArchive:
+            "Drop to Extract"
+        }
     }
 }
 

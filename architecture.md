@@ -2,7 +2,7 @@
 
 ## Product Direction
 
-SK Origami is a macOS SwiftUI archive utility focused on fast drag-and-drop archive workflows, simple format conversion, archive inspection without extraction, selective extraction, archive creation, and easy preferences for common cleanup behavior.
+SK Origami is a macOS SwiftUI archive utility focused on fast drag-and-drop archive workflows, folder-to-disk-image creation, simple format conversion, archive inspection without extraction, selective extraction, archive creation, and easy preferences for common cleanup behavior.
 
 The app supports system appearances by using semantic SwiftUI styles, native materials, and macOS settings storage. The UI is designed as a normal Dock app with a primary archive workspace window and a separate Settings scene.
 
@@ -64,6 +64,10 @@ The UI surfaces unavailable capabilities instead of pretending every format can 
 
 DRFX files are treated as ZIP-compatible archives with a `.drfx` extension. The app can inspect, extract, create, and add files to DRFX packages through the ZIP-style archive path.
 
+## Disk Image Creation
+
+Folder inputs are routed separately from archive files. Dropped folders and folders received from Finder are staged as disk image jobs, while dropped files continue through archive opening. The disk image path uses macOS `hdiutil`: `create -srcfolder` for compressed DMG output and `makehybrid -iso -joliet` for ISO output. Folders containing `.exe` or `.msi` files default to ISO; other folders default to DMG. Users can override the format and output name before starting the queue.
+
 ## Password Handling
 
 `PasswordVault` stores archive-password references locally using `UserDefaults` in the first version. The service interface is isolated so this can move to Keychain without affecting callers. Passwords are associated with archive display names, file paths, format, and creation dates.
@@ -73,6 +77,7 @@ DRFX files are treated as ZIP-compatible archives with a `.drfx` extension. The 
 - Extraction defaults to the same folder as the archive unless the user chooses a custom destination.
 - The extraction pipeline can filter nuisance files such as `.DS_Store` and `__MACOSX`.
 - Moving an archive to Trash after successful extraction is handled by `FileManager.trashItem`.
+- Moving a source folder to Trash after successful DMG/ISO creation is optional and uses the same `FileManager.trashItem` approach.
 - Archive modification creates temporary working output before replacing files.
 - Finder double-click support is implemented through bundle document types and `application(_:open:)`, which routes archives opened from Finder into the workspace.
 - File association setup is exposed from Settings. `FileAssociationService` uses LaunchServices to ask macOS to make SK Origami the default viewer for supported archive UTIs/extensions. This is a per-user system setting and is most reliable after the app has been staged or installed as a normal `.app` bundle.

@@ -106,6 +106,18 @@ struct CreateArchiveSheet: View {
         }
         .padding(24)
         .frame(width: 620, height: 520)
+        .onAppear {
+            let pending = workspace.consumePendingCreateSources()
+            guard !pending.isEmpty else { return }
+            sources.append(contentsOf: pending)
+            if pending.count == 1 {
+                archiveName = pending[0].deletingPathExtension().lastPathComponent
+                destinationFolder = pending[0].deletingLastPathComponent()
+            } else if let first = pending.first {
+                archiveName = "Archive"
+                destinationFolder = first.deletingLastPathComponent()
+            }
+        }
     }
 
     private func chooseSources() {

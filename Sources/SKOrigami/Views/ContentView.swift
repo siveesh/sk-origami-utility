@@ -1,8 +1,8 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct ContentView: View {
     @EnvironmentObject private var workspace: ArchiveWorkspaceStore
+    @State private var isDropTargeted = false
 
     var body: some View {
         NavigationSplitView {
@@ -17,26 +17,43 @@ struct ContentView: View {
                     workspace.presentOpenPanel()
                 } label: {
                     Label("Open", systemImage: "folder")
+                        .foregroundStyle(workspace.dropBehavior == .openArchives ? Color.accentColor : Color.primary)
                 }
+                .help("Open archives. Drops open archive files.")
 
                 Button {
-                    workspace.isShowingCreateSheet = true
+                    workspace.presentCreateArchive()
                 } label: {
                     Label("Create", systemImage: "archivebox")
+                        .foregroundStyle(workspace.dropBehavior == .createArchive ? Color.accentColor : Color.primary)
                 }
+                .help("Create an archive. Drops add files or folders to a new archive.")
 
                 Button {
-                    workspace.isShowingExtractSheet = true
+                    workspace.presentFolderImagePanel()
+                } label: {
+                    Label("Image", systemImage: "opticaldiscdrive")
+                        .foregroundStyle(workspace.dropBehavior == .createDiskImage ? Color.accentColor : Color.primary)
+                }
+                .help("Create a DMG or ISO. Drops stage folders for disk image creation.")
+
+                Button {
+                    workspace.setDropBehavior(.extractArchive)
+                    if workspace.selectedArchive != nil {
+                        workspace.isShowingExtractSheet = true
+                    }
                 } label: {
                     Label("Extract", systemImage: "square.and.arrow.down")
+                        .foregroundStyle(workspace.dropBehavior == .extractArchive ? Color.accentColor : Color.primary)
                 }
-                .disabled(workspace.selectedArchive == nil)
+                .help("Extract an archive. Drops open an archive and show extraction options.")
 
                 Button {
                     workspace.isShowingPasswordVault = true
                 } label: {
                     Label("Passwords", systemImage: "key")
                 }
+                .help("Open saved archive passwords.")
             }
         }
         .sheet(isPresented: $workspace.isShowingCreateSheet) {
@@ -66,24 +83,22 @@ struct ContentView: View {
         } message: {
             Text(workspace.lastError ?? "")
         }
-        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
-            loadDroppedFiles(providers)
+        .overlay {
+            DropTargetView(
+                onFileURLsDropped: { urls in
+                    workspace.handleIncomingURLs(urls)
+                },
+                onIsTargetedChanged: { isDropTargeted = $0 }
+            )
         }
-    }
-
-    private func loadDroppedFiles(_ providers: [NSItemProvider]) -> Bool {
-        for provider in providers {
-            provider.loadDataRepresentation(forTypeIdentifier: UTType.fileURL.identifier) { data, _ in
-                guard
-                    let data,
-                    let string = String(data: data, encoding: .utf8),
-                    let url = URL(string: string)
-                else { return }
-                Task { @MainActor in
-                    workspace.openArchives([url])
-                }
+        .overlay {
+            if isDropTargeted {
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 3, dash: [8]))
+                    .padding(10)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
             }
         }
-        return true
     }
 }
