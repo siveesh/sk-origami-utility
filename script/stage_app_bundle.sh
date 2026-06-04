@@ -61,6 +61,9 @@ cat >"$INFO_PLIST" <<PLIST
         <string>drfx</string>
         <string>dat</string>
         <string>tnef</string>
+        <string>001</string>
+        <string>z01</string>
+        <string>r00</string>
       </array>
       <key>CFBundleTypeIconFile</key>
       <string>AppIcon</string>

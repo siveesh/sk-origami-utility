@@ -6,6 +6,34 @@ struct ProcessResult {
     var standardError: String
 }
 
+private final class ProcessOutputBuffer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var outputData = Data()
+    private var errorData = Data()
+
+    func storeOutput(_ data: Data) {
+        lock.lock()
+        outputData = data
+        lock.unlock()
+    }
+
+    func storeError(_ data: Data) {
+        lock.lock()
+        errorData = data
+        lock.unlock()
+    }
+
+    func result(exitCode: Int32) -> ProcessResult {
+        lock.lock()
+        defer { lock.unlock() }
+        return ProcessResult(
+            exitCode: exitCode,
+            standardOutput: String(data: outputData, encoding: .utf8) ?? "",
+            standardError: String(data: errorData, encoding: .utf8) ?? ""
+        )
+    }
+}
+
 enum ProcessRunnerError: LocalizedError {
     case missingExecutable(String)
     case failed(String)
@@ -53,20 +81,38 @@ final class ProcessRunner {
         process.currentDirectoryURL = currentDirectory
 
         let output = Pipe()
-        let error = Pipe()
+        let standardError = Pipe()
         process.standardOutput = output
-        process.standardError = error
+        process.standardError = standardError
 
         return try await withCheckedThrowingContinuation { continuation in
+            let group = DispatchGroup()
+            let buffer = ProcessOutputBuffer()
+
             process.terminationHandler = { process in
-                let out = String(data: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                let err = String(data: error.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                continuation.resume(returning: ProcessResult(exitCode: process.terminationStatus, standardOutput: out, standardError: err))
+                group.notify(queue: .global()) {
+                    continuation.resume(returning: buffer.result(exitCode: process.terminationStatus))
+                }
+            }
+
+            group.enter()
+            DispatchQueue.global().async {
+                buffer.storeOutput(output.fileHandleForReading.readDataToEndOfFile())
+                group.leave()
+            }
+            group.enter()
+            DispatchQueue.global().async {
+                buffer.storeError(standardError.fileHandleForReading.readDataToEndOfFile())
+                group.leave()
             }
 
             do {
                 try process.run()
+                output.fileHandleForWriting.closeFile()
+                standardError.fileHandleForWriting.closeFile()
             } catch {
+                output.fileHandleForWriting.closeFile()
+                standardError.fileHandleForWriting.closeFile()
                 continuation.resume(throwing: error)
             }
         }

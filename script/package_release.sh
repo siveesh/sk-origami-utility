@@ -9,12 +9,12 @@ APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
 VERSION="${1:-0.1.0}"
 
 cd "$ROOT_DIR"
-"$ROOT_DIR/script/verify_bundled_tools.sh"
+bash "$ROOT_DIR/script/verify_bundled_tools.sh"
 swift build -c release
 BUILD_BINARY="$(swift build -c release --show-bin-path)/$APP_NAME"
 
-"$ROOT_DIR/script/stage_app_bundle.sh" "$BUILD_BINARY" "$APP_BUNDLE"
-"$ROOT_DIR/script/verify_app_bundle.sh"
+bash "$ROOT_DIR/script/stage_app_bundle.sh" "$BUILD_BINARY" "$APP_BUNDLE"
+bash "$ROOT_DIR/script/verify_app_bundle.sh"
 
 find "$APP_BUNDLE/Contents/Resources/Tools" -type f \( -perm -111 -o -name "*.so" \) -print0 | while IFS= read -r -d '' item; do
   if file "$item" | grep -q "Mach-O"; then

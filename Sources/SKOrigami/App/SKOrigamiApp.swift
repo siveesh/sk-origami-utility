@@ -39,7 +39,8 @@ struct SKOrigamiApp: App {
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     static var pendingOpenURLs: [URL] = []
-    static var openHandler: (([URL]) -> Void)?
+    static var finderOpenHandler: (([URL]) -> Void)?
+    static var incomingURLHandler: (([URL]) -> Void)?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -48,8 +49,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func application(_ sender: NSApplication, open urls: [URL]) {
-        if let openHandler = Self.openHandler {
-            openHandler(urls)
+        if let finderOpenHandler = Self.finderOpenHandler {
+            finderOpenHandler(urls)
         } else {
             Self.pendingOpenURLs.append(contentsOf: urls)
         }
@@ -75,8 +76,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let folders = urls.filter(\.isExistingDirectory)
         guard !folders.isEmpty else { return }
 
-        if let openHandler = Self.openHandler {
-            openHandler(folders)
+        if let incomingURLHandler = Self.incomingURLHandler {
+            incomingURLHandler(folders)
         } else {
             Self.pendingOpenURLs.append(contentsOf: folders)
         }

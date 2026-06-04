@@ -9,10 +9,19 @@ struct CreateArchiveSheet: View {
     @State private var archiveName = "Archive"
     @State private var selectedFormat: ArchiveFormat = .zip
     @State private var password = ""
-    @State private var splitVolumeSize = ""
+    @State private var splitVolumes = false
+    @State private var splitVolumeAmount = "100"
+    @State private var splitVolumeUnit = SplitVolumeUnit.megabytes
 
     private var formats: [ArchiveFormat] {
         ArchiveFormat.allCases.filter { $0.supportsCreationInUI }
+    }
+
+    private var splitVolumeSize: String {
+        guard splitVolumes, selectedFormat.supportsSplitVolumes else { return "" }
+        let amount = splitVolumeAmount.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !amount.isEmpty else { return "" }
+        return amount + splitVolumeUnit.commandSuffix
     }
 
     var body: some View {
@@ -46,9 +55,29 @@ struct CreateArchiveSheet: View {
                 }
 
                 GridRow {
-                    Text("Split")
-                    TextField("Example: 100m", text: $splitVolumeSize)
-                        .textFieldStyle(.roundedBorder)
+                    Text("Volumes")
+                    VStack(alignment: .leading, spacing: 8) {
+                        Toggle("Split into multiple parts", isOn: $splitVolumes)
+                            .disabled(!selectedFormat.supportsSplitVolumes)
+                        HStack {
+                            TextField("Size", text: $splitVolumeAmount)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 90)
+                            Picker("Unit", selection: $splitVolumeUnit) {
+                                ForEach(SplitVolumeUnit.allCases) { unit in
+                                    Text(unit.label).tag(unit)
+                                }
+                            }
+                            .labelsHidden()
+                            .frame(width: 130)
+                        }
+                        .disabled(!splitVolumes || !selectedFormat.supportsSplitVolumes)
+                        if !selectedFormat.supportsSplitVolumes {
+                            Text("Splitting is available for ZIP and 7-Zip archives.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
 
                 GridRow {
@@ -106,6 +135,11 @@ struct CreateArchiveSheet: View {
         }
         .padding(24)
         .frame(width: 620, height: 520)
+        .onChange(of: selectedFormat) { _, newFormat in
+            if !newFormat.supportsSplitVolumes {
+                splitVolumes = false
+            }
+        }
         .onAppear {
             let pending = workspace.consumePendingCreateSources()
             guard !pending.isEmpty else { return }
@@ -137,6 +171,30 @@ struct CreateArchiveSheet: View {
         panel.allowsMultipleSelection = false
         if panel.runModal() == .OK, let url = panel.url {
             destinationFolder = url
+        }
+    }
+}
+
+private enum SplitVolumeUnit: String, CaseIterable, Identifiable {
+    case kilobytes
+    case megabytes
+    case gigabytes
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .kilobytes: "KB"
+        case .megabytes: "MB"
+        case .gigabytes: "GB"
+        }
+    }
+
+    var commandSuffix: String {
+        switch self {
+        case .kilobytes: "k"
+        case .megabytes: "m"
+        case .gigabytes: "g"
         }
     }
 }

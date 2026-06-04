@@ -39,6 +39,9 @@ final class ArchiveService {
         let format = ArchiveFormat.infer(from: url)
         switch format {
         case .zip, .jar, .apk, .drfx:
+            if isMultipartArchive(url) {
+                return try await listSevenZipStyleEntries(url)
+            }
             return try await listZipEntries(url)
         case .tar, .tarGzip, .tarXz, .tarBzip2:
             return try await listTarEntries(url)
@@ -77,7 +80,11 @@ final class ArchiveService {
 
         switch request.archive.format {
         case .zip, .jar, .apk, .drfx:
-            try await extractZipLikeArchive(request)
+            if isMultipartArchive(request.archive.url) {
+                try await extractExternalArchive(request)
+            } else {
+                try await extractZipLikeArchive(request)
+            }
         case .tar, .tarGzip, .tarXz, .tarBzip2:
             try await extractTarArchive(request)
         case .sevenZip, .rar, .rar5:
@@ -94,8 +101,29 @@ final class ArchiveService {
             removeUnnecessaryFiles(in: request.destination)
         }
         if request.moveArchiveToTrash {
-            var trashedURL: NSURL?
-            try FileManager.default.trashItem(at: request.archive.url, resultingItemURL: &trashedURL)
+            try trashArchiveFamily(containing: request.archive.url)
+        }
+    }
+
+    func isEncrypted(_ url: URL) async throws -> Bool {
+        let format = ArchiveFormat.infer(from: url)
+        switch format {
+        case .zip, .jar, .apk, .drfx:
+            guard let zipinfo = runner.locate(["zipinfo"]) else { throw ProcessRunnerError.missingExecutable("zipinfo") }
+            let result = try await runner.run(zipinfo, arguments: ["-v", url.path])
+            try validate(result)
+            return result.standardOutput.lines
+                .map { $0.lowercased() }
+                .contains { $0.contains("file security status:") && $0.contains("encrypted") && !$0.contains("not encrypted") }
+        case .sevenZip, .rar, .rar5:
+            guard let sevenZip = runner.locate(["7zz", "7z"]) else {
+                throw ProcessRunnerError.missingExecutable("7z")
+            }
+            let result = try await runner.run(sevenZip, arguments: ["l", "-slt", url.path])
+            try validate(result)
+            return result.standardOutput.contains("Encrypted = +")
+        default:
+            return false
         }
     }
 
@@ -154,8 +182,8 @@ final class ArchiveService {
         if !request.password.isEmpty {
             arguments.insert(contentsOf: ["-P", request.password], at: 0)
         }
-        if !request.splitVolumeSize.isEmpty {
-            arguments.insert(contentsOf: ["-s", request.splitVolumeSize], at: 0)
+        if let splitVolumeSize = normalizedSplitVolumeSize(from: request.splitVolumeSize) {
+            arguments.insert(contentsOf: ["-s", splitVolumeSize], at: 0)
         }
         let result = try await runner.run(zip, arguments: arguments)
         try validate(result)
@@ -181,8 +209,8 @@ final class ArchiveService {
         if !request.password.isEmpty {
             arguments.insert("-p\(request.password)", at: 1)
         }
-        if !request.splitVolumeSize.isEmpty {
-            arguments.insert("-v\(request.splitVolumeSize)", at: 1)
+        if let splitVolumeSize = normalizedSplitVolumeSize(from: request.splitVolumeSize) {
+            arguments.insert("-v\(splitVolumeSize)", at: 1)
         }
         let result = try await runner.run(tool, arguments: arguments)
         try validate(result)
@@ -213,19 +241,42 @@ final class ArchiveService {
     }
 
     private func extractExternalArchive(_ request: ExtractArchiveRequest) async throws {
+        if request.archive.format == .rar || request.archive.format == .rar5,
+           let unar = runner.locate(["unar"]) {
+            try validate(try await extractWithUnar(request, tool: unar))
+            return
+        }
+
         guard let tool = runner.locate(["7zz", "7z", "unar", "unrar"]) else {
             throw ProcessRunnerError.missingExecutable("7z, unar, or unrar")
         }
-        let arguments: [String]
+        let result: ProcessResult
         if tool.hasSuffix("unar") {
-            arguments = ["-o", request.destination.path, request.archive.url.path]
+            result = try await extractWithUnar(request, tool: tool)
         } else if tool.hasSuffix("unrar") {
-            arguments = ["x", "-o+", request.archive.url.path, request.destination.path]
+            let arguments = ["x", "-o+"] + (request.password.isEmpty ? [] : ["-p\(request.password)"]) + [request.archive.url.path, request.destination.path]
+            result = try await runner.run(tool, arguments: arguments)
         } else {
-            arguments = ["x", "-y", "-o\(request.destination.path)", request.archive.url.path]
+            let arguments = ["x", "-y"] + (request.password.isEmpty ? [] : ["-p\(request.password)"]) + ["-o\(request.destination.path)", request.archive.url.path]
+            let sevenZipResult = try await runner.run(tool, arguments: arguments)
+            if sevenZipResult.exitCode != 0,
+               request.archive.format == .rar || request.archive.format == .rar5,
+               let unar = runner.locate(["unar"]) {
+                result = try await extractWithUnar(request, tool: unar)
+            } else {
+                result = sevenZipResult
+            }
         }
-        let result = try await runner.run(tool, arguments: arguments)
         try validate(result)
+    }
+
+    private func extractWithUnar(_ request: ExtractArchiveRequest, tool: String) async throws -> ProcessResult {
+        var arguments = ["-q", "-f", "-nr", "-o", request.destination.path]
+        if !request.password.isEmpty {
+            arguments += ["-p", request.password]
+        }
+        arguments.append(request.archive.url.path)
+        return try await runner.run(tool, arguments: arguments)
     }
 
     private func extractGzip(_ request: ExtractArchiveRequest) async throws {
@@ -245,6 +296,119 @@ final class ArchiveService {
             let message = result.standardError.isEmpty ? result.standardOutput : result.standardError
             throw ProcessRunnerError.failed(message.trimmingCharacters(in: .whitespacesAndNewlines))
         }
+    }
+
+    private func normalizedSplitVolumeSize(from rawValue: String) -> String? {
+        let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !value.isEmpty else { return nil }
+        return value
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "mb", with: "m")
+            .replacingOccurrences(of: "gb", with: "g")
+            .replacingOccurrences(of: "kb", with: "k")
+    }
+
+    private func isMultipartArchive(_ url: URL) -> Bool {
+        archiveFamilyURLs(containing: url).count > 1 || isMultipartSegmentName(url.lastPathComponent.lowercased())
+    }
+
+    func archiveFamilyURLs(containing url: URL) -> [URL] {
+        let folder = url.deletingLastPathComponent()
+        guard let siblings = try? FileManager.default.contentsOfDirectory(
+            at: folder,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return [url]
+        }
+
+        let names = Set(multipartFamilyNames(for: url.lastPathComponent.lowercased()))
+        guard !names.isEmpty else { return [url] }
+
+        let family = siblings
+            .filter { names.contains($0.lastPathComponent.lowercased()) }
+            .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+        return family.isEmpty ? [url] : family
+    }
+
+    private func trashArchiveFamily(containing url: URL) throws {
+        for part in archiveFamilyURLs(containing: url) where FileManager.default.fileExists(atPath: part.path) {
+            var trashedURL: NSURL?
+            try FileManager.default.trashItem(at: part, resultingItemURL: &trashedURL)
+        }
+    }
+
+    private func multipartFamilyNames(for fileName: String) -> [String] {
+        let name = fileName.lowercased()
+        let archiveExtensions = ["7z", "zip"]
+
+        for archiveExtension in archiveExtensions {
+            let marker = ".\(archiveExtension)."
+            if let range = name.range(of: marker, options: .backwards) {
+                let prefix = String(name[..<range.upperBound])
+                return numberedFamilyNames(prefix: prefix, digits: 3)
+            }
+        }
+
+        if name.range(of: #"\.z\d{2,3}$"#, options: .regularExpression) != nil {
+            let prefix = removingPathExtension(from: name)
+            return [prefix + ".zip"] + (1...999).map { "\(prefix).z\(String(format: "%02d", $0))" }
+        }
+
+        if name.hasSuffix(".zip") {
+            let prefix = String(name.dropLast(4))
+            return [name] + (1...999).map { "\(prefix).z\(String(format: "%02d", $0))" }
+        }
+
+        if let range = name.range(of: #"\.part\d+\.rar$"#, options: .regularExpression) {
+            let prefix = String(name[..<range.lowerBound])
+            return (1...999).flatMap { number in
+                [
+                    "\(prefix).part\(number).rar",
+                    "\(prefix).part\(String(format: "%02d", number)).rar",
+                    "\(prefix).part\(String(format: "%03d", number)).rar"
+                ]
+            }
+        }
+
+        if name.hasSuffix(".rar") {
+            let prefix = String(name.dropLast(4))
+            return [name] + (0...999).flatMap { number in
+                [
+                    "\(prefix).r\(String(format: "%02d", number))",
+                    "\(prefix).r\(String(format: "%03d", number))"
+                ]
+            }
+        }
+
+        if name.range(of: #"\.r\d{2,3}$"#, options: .regularExpression) != nil {
+            let prefix = removingPathExtension(from: name)
+            return ["\(prefix).rar"] + (0...999).flatMap { number in
+                [
+                    "\(prefix).r\(String(format: "%02d", number))",
+                    "\(prefix).r\(String(format: "%03d", number))"
+                ]
+            }
+        }
+
+        return [name]
+    }
+
+    private func removingPathExtension(from fileName: String) -> String {
+        let pathExtension = (fileName as NSString).pathExtension
+        guard !pathExtension.isEmpty else { return fileName }
+        return String(fileName.dropLast(pathExtension.count + 1))
+    }
+
+    private func numberedFamilyNames(prefix: String, digits: Int) -> [String] {
+        (1...999).map { "\(prefix)\(String(format: "%0\(digits)d", $0))" }
+    }
+
+    private func isMultipartSegmentName(_ name: String) -> Bool {
+        name.range(of: #"\.(7z|zip)\.\d{3}$"#, options: .regularExpression) != nil ||
+            name.range(of: #"\.z\d{2,3}$"#, options: .regularExpression) != nil ||
+            name.range(of: #"\.part\d+\.rar$"#, options: .regularExpression) != nil ||
+            name.range(of: #"\.r\d{2,3}$"#, options: .regularExpression) != nil
     }
 
     private func removeUnnecessaryFiles(in folder: URL) {

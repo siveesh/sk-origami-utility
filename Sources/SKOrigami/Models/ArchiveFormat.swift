@@ -64,6 +64,15 @@ enum ArchiveFormat: String, CaseIterable, Identifiable, Codable {
         }
     }
 
+    var supportsSplitVolumes: Bool {
+        switch self {
+        case .zip, .sevenZip:
+            true
+        default:
+            false
+        }
+    }
+
     var supportsCreationInUI: Bool {
         switch self {
         case .zip, .sevenZip, .tar, .tarGzip, .tarXz, .tarBzip2, .gzip, .jar, .drfx:
@@ -76,6 +85,11 @@ enum ArchiveFormat: String, CaseIterable, Identifiable, Codable {
     static func infer(from url: URL) -> ArchiveFormat {
         let name = url.lastPathComponent.lowercased()
         if name == "winmail.dat" || name.hasSuffix(".tnef") { return .tnef }
+        if name.range(of: #"\.part\d+\.rar$"#, options: .regularExpression) != nil { return .rar }
+        if name.range(of: #"\.r\d{2,3}$"#, options: .regularExpression) != nil { return .rar }
+        if name.range(of: #"\.7z\.\d{3}$"#, options: .regularExpression) != nil { return .sevenZip }
+        if name.range(of: #"\.zip\.\d{3}$"#, options: .regularExpression) != nil { return .sevenZip }
+        if name.range(of: #"\.z\d{2,3}$"#, options: .regularExpression) != nil { return .zip }
         if name.hasSuffix(".tar.gz") || name.hasSuffix(".tgz") { return .tarGzip }
         if name.hasSuffix(".tar.xz") || name.hasSuffix(".txz") { return .tarXz }
         if name.hasSuffix(".tar.bz2") || name.hasSuffix(".tbz2") { return .tarBzip2 }

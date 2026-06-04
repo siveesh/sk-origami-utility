@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import SwiftUI
 
 @MainActor
 final class ArchiveWorkspaceStore: ObservableObject {
@@ -17,11 +18,16 @@ final class ArchiveWorkspaceStore: ObservableObject {
     @Published var lastError: String?
     @Published var dropBehavior: DropBehavior = .createDiskImage
     @Published var pendingCreateSources: [URL] = []
+    @Published var extractionJobs: [ExtractionJob] = []
+    @Published var isShowingExtractionPasswordPrompt = false
 
     let archiveService = ArchiveService()
     let diskImageService = DiskImageService()
     private let passwordVault = PasswordVault()
     private var isCreatingDiskImage = false
+    private var isProcessingExtractionQueue = false
+    private var pendingPasswordJobID: ExtractionJob.ID?
+    private var extractionProgressWindowController: NSWindowController?
 
     var selectedArchive: ArchiveDocument? {
         archives.first { $0.id == selectedArchiveID }
@@ -35,10 +41,40 @@ final class ArchiveWorkspaceStore: ObservableObject {
         return archive.entries.filter { $0.path.localizedCaseInsensitiveContains(searchText) }
     }
 
+    var isExtractingArchives: Bool {
+        extractionJobs.contains {
+            switch $0.state {
+            case .queued, .checkingEncryption, .waitingForPassword, .extracting:
+                true
+            case .done, .failed:
+                false
+            }
+        }
+    }
+
+    var pendingPasswordArchiveName: String {
+        pendingPasswordJob?.archive.displayName ?? ""
+    }
+
+    var savedPasswordForPendingExtraction: String {
+        guard let path = pendingPasswordJob?.archive.url.path else { return "" }
+        return passwordRecords.first { $0.archivePath == path }?.password ?? ""
+    }
+
+    private var pendingPasswordJob: ExtractionJob? {
+        guard let pendingPasswordJobID else { return nil }
+        return extractionJobs.first { $0.id == pendingPasswordJobID }
+    }
+
     init() {
         passwordRecords = passwordVault.load()
         registerDefaultPreferences()
-        AppDelegate.openHandler = { [weak self] urls in
+        AppDelegate.finderOpenHandler = { [weak self] urls in
+            Task { @MainActor in
+                self?.handleFinderOpenURLs(urls)
+            }
+        }
+        AppDelegate.incomingURLHandler = { [weak self] urls in
             Task { @MainActor in
                 self?.handleIncomingURLs(urls)
             }
@@ -46,7 +82,7 @@ final class ArchiveWorkspaceStore: ObservableObject {
         if !AppDelegate.pendingOpenURLs.isEmpty {
             let urls = AppDelegate.pendingOpenURLs
             AppDelegate.pendingOpenURLs.removeAll()
-            handleIncomingURLs(urls)
+            handleFinderOpenURLs(urls)
         }
     }
 
@@ -116,6 +152,121 @@ final class ArchiveWorkspaceStore: ObservableObject {
             }
             openArchives([archiveURL])
             isShowingExtractSheet = true
+        }
+    }
+
+    func handleFinderOpenURLs(_ urls: [URL]) {
+        let folders = urls.filter(\.isExistingDirectory)
+        let files = urls.filter { !$0.isExistingDirectory }
+
+        if !files.isEmpty {
+            queueQuickExtractions(files)
+        }
+        if !folders.isEmpty {
+            stageDiskImageFolders(folders)
+        }
+    }
+
+    func queueQuickExtractions(_ urls: [URL]) {
+        for url in urls {
+            let archive = ArchiveDocument(url: url, format: ArchiveFormat.infer(from: url))
+            extractionJobs.append(ExtractionJob(archive: archive))
+        }
+        showExtractionProgressWindow()
+        processNextExtractionJob()
+    }
+
+    func clearFinishedExtractionJobs() {
+        extractionJobs.removeAll {
+            switch $0.state {
+            case .done, .failed:
+                true
+            default:
+                false
+            }
+        }
+    }
+
+    func submitQuickExtractionPassword(_ password: String) {
+        guard let job = pendingPasswordJob else { return }
+        isShowingExtractionPasswordPrompt = false
+        pendingPasswordJobID = nil
+        performQuickExtraction(job, password: password)
+    }
+
+    func cancelQuickExtractionPassword() {
+        guard let job = pendingPasswordJob else { return }
+        job.state = .failed("Password entry cancelled.")
+        isShowingExtractionPasswordPrompt = false
+        pendingPasswordJobID = nil
+        isProcessingExtractionQueue = false
+        processNextExtractionJob()
+    }
+
+    private func showExtractionProgressWindow() {
+        if extractionProgressWindowController == nil {
+            let rootView = ExtractionProgressView().environmentObject(self)
+            let window = NSWindow(contentViewController: NSHostingController(rootView: rootView))
+            window.title = "Archive Extraction"
+            window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+            window.setContentSize(NSSize(width: 560, height: 340))
+            window.center()
+            extractionProgressWindowController = NSWindowController(window: window)
+        }
+        extractionProgressWindowController?.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func processNextExtractionJob() {
+        guard !isProcessingExtractionQueue,
+              let job = extractionJobs.first(where: { $0.state == .queued }) else { return }
+        isProcessingExtractionQueue = true
+        job.state = .checkingEncryption
+
+        Task {
+            do {
+                if try await archiveService.isEncrypted(job.archive.url) {
+                    job.state = .waitingForPassword
+                    pendingPasswordJobID = job.id
+                    isShowingExtractionPasswordPrompt = true
+                } else {
+                    performQuickExtraction(job, password: "")
+                }
+            } catch {
+                job.state = .failed(error.localizedDescription)
+                isProcessingExtractionQueue = false
+                processNextExtractionJob()
+            }
+        }
+    }
+
+    private func performQuickExtraction(_ job: ExtractionJob, password: String) {
+        job.state = .extracting
+        let defaults = UserDefaults.standard
+        let destination = defaults.bool(forKey: PreferenceKeys.defaultExtractSameLocation)
+            ? job.archive.containingFolder
+            : FileManager.default.homeDirectoryForCurrentUser
+        let request = ExtractArchiveRequest(
+            archive: job.archive,
+            selectedEntries: [],
+            destination: destination,
+            password: password,
+            filterUnnecessaryFiles: defaults.bool(forKey: PreferenceKeys.filterUnnecessaryFiles),
+            moveArchiveToTrash: defaults.bool(forKey: PreferenceKeys.moveArchiveToTrashAfterExtraction)
+        )
+
+        Task {
+            do {
+                try await archiveService.extractArchive(request)
+                if !password.isEmpty {
+                    rememberPassword(for: job.archive.url, format: job.archive.format, password: password)
+                }
+                job.state = .done
+            } catch {
+                job.state = .failed(error.localizedDescription)
+            }
+            isProcessingExtractionQueue = false
+            processNextExtractionJob()
         }
     }
 

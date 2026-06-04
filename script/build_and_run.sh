@@ -14,13 +14,13 @@ APP_BINARY="$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 
 cd "$ROOT_DIR"
-"$ROOT_DIR/script/verify_bundled_tools.sh"
+bash "$ROOT_DIR/script/verify_bundled_tools.sh"
 swift build
 BUILD_BINARY="$(swift build --show-bin-path)/$APP_NAME"
 
-"$ROOT_DIR/script/stage_app_bundle.sh" "$BUILD_BINARY" "$APP_BUNDLE"
+bash "$ROOT_DIR/script/stage_app_bundle.sh" "$BUILD_BINARY" "$APP_BUNDLE"
 
-"$ROOT_DIR/script/verify_app_bundle.sh"
+bash "$ROOT_DIR/script/verify_app_bundle.sh"
 
 open_app() {
   /usr/bin/open -n "$APP_BUNDLE"
