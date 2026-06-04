@@ -120,6 +120,9 @@ final class ArchiveService {
                 throw ProcessRunnerError.missingExecutable("7z")
             }
             let result = try await runner.run(sevenZip, arguments: ["l", "-slt", url.path])
+            if Self.outputIndicatesPasswordRequired(result) {
+                return true
+            }
             try validate(result)
             return result.standardOutput.contains("Encrypted = +")
         default:
@@ -161,6 +164,9 @@ final class ArchiveService {
         }
         let args = (sevenZip.hasSuffix("lsar") || sevenZip.hasSuffix("unar")) ? ["-l", url.path] : ["l", "-ba", url.path]
         let result = try await runner.run(sevenZip, arguments: args)
+        if Self.outputIndicatesPasswordRequired(result) {
+            throw ProcessRunnerError.failed("This archive requires a password. Use Extract and enter the password to unpack it.")
+        }
         try validate(result)
         return result.standardOutput.lines
             .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -296,6 +302,14 @@ final class ArchiveService {
             let message = result.standardError.isEmpty ? result.standardOutput : result.standardError
             throw ProcessRunnerError.failed(message.trimmingCharacters(in: .whitespacesAndNewlines))
         }
+    }
+
+    static func outputIndicatesPasswordRequired(_ result: ProcessResult) -> Bool {
+        let output = "\(result.standardOutput)\n\(result.standardError)".lowercased()
+        return output.contains("enter password") ||
+            output.contains("requires a password") ||
+            output.contains("wrong password") ||
+            output.contains("password is incorrect")
     }
 
     private func normalizedSplitVolumeSize(from rawValue: String) -> String? {

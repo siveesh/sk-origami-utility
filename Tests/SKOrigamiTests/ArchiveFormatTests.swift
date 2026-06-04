@@ -80,6 +80,26 @@ final class ArchiveFormatTests: XCTestCase {
         XCTAssertEqual(primary.lastPathComponent, "backup.rar")
     }
 
+    func testDetectsPasswordPromptOutput() {
+        let result = ProcessResult(
+            exitCode: 255,
+            standardOutput: "\nEnter password:\n",
+            standardError: "\nBreak signaled\n"
+        )
+
+        XCTAssertTrue(ArchiveService.outputIndicatesPasswordRequired(result))
+    }
+
+    func testDetectsPasswordRequiredOutput() {
+        let result = ProcessResult(
+            exitCode: 2,
+            standardOutput: "",
+            standardError: "This archive requires a password to unpack. Use the -p option to provide one."
+        )
+
+        XCTAssertTrue(ArchiveService.outputIndicatesPasswordRequired(result))
+    }
+
     private func makeTemporaryFolder() throws -> URL {
         let folder = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
