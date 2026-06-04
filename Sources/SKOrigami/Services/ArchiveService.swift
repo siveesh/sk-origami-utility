@@ -331,6 +331,30 @@ final class ArchiveService {
         return family.isEmpty ? [url] : family
     }
 
+    func primaryArchiveURL(containing url: URL) -> URL {
+        let family = archiveFamilyURLs(containing: url)
+        let namesByLowercase = Dictionary(uniqueKeysWithValues: family.map { ($0.lastPathComponent.lowercased(), $0) })
+        let selectedName = url.lastPathComponent.lowercased()
+
+        if selectedName.range(of: #"\.z\d{2,3}$"#, options: .regularExpression) != nil ||
+            selectedName.hasSuffix(".zip") {
+            let prefix = removingPathExtension(from: selectedName)
+            if let finalZip = namesByLowercase["\(prefix).zip"] {
+                return finalZip
+            }
+        }
+
+        if selectedName.range(of: #"\.r\d{2,3}$"#, options: .regularExpression) != nil ||
+            selectedName.hasSuffix(".rar") {
+            let prefix = removingPathExtension(from: selectedName)
+            if let rar = namesByLowercase["\(prefix).rar"] {
+                return rar
+            }
+        }
+
+        return family.first ?? url
+    }
+
     private func trashArchiveFamily(containing url: URL) throws {
         for part in archiveFamilyURLs(containing: url) where FileManager.default.fileExists(atPath: part.path) {
             var trashedURL: NSURL?

@@ -17,6 +17,7 @@ SK Origami is a macOS SwiftUI utility for opening, inspecting, creating, modifyi
 - Modify ZIP-style archives by adding files.
 - Extract ZIP, JAR, APK, DRFX, TAR variants, Gzip, 7z, RAR/RAR5, and TNEF/winmail.dat when compatible local tools are installed.
 - Extract common multipart archive families such as `.7z.001`, `.zip`/`.z01`, `.part1.rar`, and `.r00`.
+- Collapse selected multipart archive parts into one Finder extraction job instead of listing each part separately.
 - Uses bundled helper tools first, so 7z/RAR/TNEF extraction works without requiring the user to install Homebrew tools separately on supported macOS ARM builds.
 - Extracts associated archive files from Finder double-clicks using the saved extraction settings and shows extraction progress instead of archive contents.
 - Prompts for a password during Finder extraction only when the archive is encrypted.
@@ -65,14 +66,14 @@ After installation, open `SK Origami > Settings > File Associations` and use **S
 ## Package Release
 
 ```bash
-./script/package_release.sh 0.3.0
+./script/package_release.sh 0.3.1
 ```
 
 Release artifacts are written to `dist/releases`:
 
-- `SK-Origami-0.3.0-macOS-arm64.zip`
-- `SK-Origami-0.3.0-macOS-arm64.dmg`
-- `SK-Origami-0.3.0-macOS-arm64.pkg`
+- `SK-Origami-0.3.1-macOS-arm64.zip`
+- `SK-Origami-0.3.1-macOS-arm64.dmg`
+- `SK-Origami-0.3.1-macOS-arm64.pkg`
 - `SHA256SUMS.txt`
 
 The release workflow creates a SwiftPM release build, stages `SK Origami.app`, copies bundled helper tools into the app bundle, verifies no helper links back to the project folder, applies ad-hoc signing, and creates ZIP, DMG, and PKG artifacts. Notarization is not included because it requires Apple Developer signing and notary credentials.

@@ -42,6 +42,19 @@ final class ArchiveFormatTests: XCTestCase {
         XCTAssertEqual(names, ["backup.z01", "backup.z02", "backup.zip"])
     }
 
+    func testChoosesFinalZipAsPrimaryForSplitZipFamily() throws {
+        let folder = try makeTemporaryFolder()
+        let firstPart = folder.appendingPathComponent("backup.z01")
+        let finalPart = folder.appendingPathComponent("backup.zip")
+        try Data().write(to: firstPart)
+        try Data().write(to: folder.appendingPathComponent("backup.z02"))
+        try Data().write(to: finalPart)
+
+        let primary = ArchiveService().primaryArchiveURL(containing: firstPart)
+
+        XCTAssertEqual(primary.lastPathComponent, "backup.zip")
+    }
+
     func testFindsRarPartFamily() throws {
         let folder = try makeTemporaryFolder()
         let firstPart = folder.appendingPathComponent("backup.part1.rar")
@@ -52,6 +65,19 @@ final class ArchiveFormatTests: XCTestCase {
         let names = ArchiveService().archiveFamilyURLs(containing: firstPart).map(\.lastPathComponent)
 
         XCTAssertEqual(names, ["backup.part1.rar", "backup.part2.rar", "backup.part3.rar"])
+    }
+
+    func testChoosesRarAsPrimaryForOldStyleRarFamily() throws {
+        let folder = try makeTemporaryFolder()
+        let firstPart = folder.appendingPathComponent("backup.r00")
+        let mainPart = folder.appendingPathComponent("backup.rar")
+        try Data().write(to: firstPart)
+        try Data().write(to: folder.appendingPathComponent("backup.r01"))
+        try Data().write(to: mainPart)
+
+        let primary = ArchiveService().primaryArchiveURL(containing: firstPart)
+
+        XCTAssertEqual(primary.lastPathComponent, "backup.rar")
     }
 
     private func makeTemporaryFolder() throws -> URL {

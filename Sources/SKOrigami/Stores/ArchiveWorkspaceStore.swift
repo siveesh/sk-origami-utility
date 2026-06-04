@@ -168,8 +168,12 @@ final class ArchiveWorkspaceStore: ObservableObject {
     }
 
     func queueQuickExtractions(_ urls: [URL]) {
+        var queuedArchivePaths = Set(extractionJobs.map { $0.archive.url.path })
         for url in urls {
-            let archive = ArchiveDocument(url: url, format: ArchiveFormat.infer(from: url))
+            let primaryURL = archiveService.primaryArchiveURL(containing: url)
+            guard queuedArchivePaths.insert(primaryURL.path).inserted else { continue }
+
+            let archive = ArchiveDocument(url: primaryURL, format: ArchiveFormat.infer(from: primaryURL))
             extractionJobs.append(ExtractionJob(archive: archive))
         }
         showExtractionProgressWindow()
