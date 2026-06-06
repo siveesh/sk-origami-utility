@@ -12,9 +12,18 @@ struct ExtractionProgressView: View {
             if workspace.extractionJobs.isEmpty {
                 ContentUnavailableView("No Extractions", systemImage: "archivebox")
             } else {
-                List(workspace.extractionJobs) { job in
-                    ExtractionProgressRow(job: job)
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(workspace.extractionJobs) { job in
+                            ExtractionProgressRow(job: job)
+                            if job.id != workspace.extractionJobs.last?.id {
+                                Divider()
+                                    .padding(.leading, 34)
+                            }
+                        }
+                    }
                 }
+                .scrollIndicators(workspace.extractionJobs.count > 8 ? .visible : .hidden)
             }
 
             HStack {
@@ -31,7 +40,7 @@ struct ExtractionProgressView: View {
             }
         }
         .padding(20)
-        .frame(width: 560, height: 340)
+        .frame(width: 560, height: workspace.extractionProgressWindowHeight)
         .sheet(isPresented: $workspace.isShowingExtractionPasswordPrompt) {
             ExtractionPasswordPrompt()
                 .environmentObject(workspace)
@@ -46,6 +55,7 @@ private struct ExtractionProgressRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             statusIcon
+                .frame(width: 24, height: 24)
             VStack(alignment: .leading, spacing: 5) {
                 Text(job.archive.displayName)
                     .lineLimit(1)
@@ -56,7 +66,7 @@ private struct ExtractionProgressRow: View {
                 progressBar
             }
         }
-        .padding(.vertical, 3)
+        .padding(.vertical, 8)
     }
 
     @ViewBuilder

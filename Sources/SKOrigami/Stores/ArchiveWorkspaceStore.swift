@@ -26,8 +26,17 @@ final class ArchiveWorkspaceStore: ObservableObject {
     private let passwordVault = PasswordVault()
     private var isCreatingDiskImage = false
     private var isProcessingExtractionQueue = false
+    private var isTransientExtractionSession = false
     private var pendingPasswordJobID: ExtractionJob.ID?
     private var extractionProgressWindowController: NSWindowController?
+
+    var extractionProgressWindowHeight: CGFloat {
+        let rowHeight: CGFloat = 62
+        let chromeHeight: CGFloat = 118
+        let emptyHeight: CGFloat = 180
+        guard !extractionJobs.isEmpty else { return emptyHeight }
+        return min(max(chromeHeight + CGFloat(extractionJobs.count) * rowHeight, 190), 620)
+    }
 
     var selectedArchive: ArchiveDocument? {
         archives.first { $0.id == selectedArchiveID }
@@ -160,14 +169,15 @@ final class ArchiveWorkspaceStore: ObservableObject {
         let files = urls.filter { !$0.isExistingDirectory }
 
         if !files.isEmpty {
-            queueQuickExtractions(files)
+            queueQuickExtractions(files, transient: true)
         }
         if !folders.isEmpty {
             stageDiskImageFolders(folders)
         }
     }
 
-    func queueQuickExtractions(_ urls: [URL]) {
+    func queueQuickExtractions(_ urls: [URL], transient: Bool = false) {
+        isTransientExtractionSession = isTransientExtractionSession || transient
         var queuedArchivePaths = Set(extractionJobs.map { $0.archive.url.path })
         for url in urls {
             let primaryURL = archiveService.primaryArchiveURL(containing: url)
@@ -177,6 +187,10 @@ final class ArchiveWorkspaceStore: ObservableObject {
             extractionJobs.append(ExtractionJob(archive: archive))
         }
         showExtractionProgressWindow()
+        if transient {
+            closePrimaryAppWindows()
+        }
+        updateExtractionProgressWindowSize(animated: false)
         processNextExtractionJob()
     }
 
@@ -189,6 +203,7 @@ final class ArchiveWorkspaceStore: ObservableObject {
                 false
             }
         }
+        updateExtractionProgressWindowSize()
     }
 
     func submitQuickExtractionPassword(_ password: String) {
@@ -212,13 +227,36 @@ final class ArchiveWorkspaceStore: ObservableObject {
             let rootView = ExtractionProgressView().environmentObject(self)
             let window = NSWindow(contentViewController: NSHostingController(rootView: rootView))
             window.title = "Archive Extraction"
-            window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-            window.setContentSize(NSSize(width: 560, height: 340))
+            window.styleMask = [.titled, .closable, .miniaturizable]
+            window.isReleasedWhenClosed = false
+            window.setContentSize(NSSize(width: 560, height: extractionProgressWindowHeight))
             window.center()
             extractionProgressWindowController = NSWindowController(window: window)
         }
         extractionProgressWindowController?.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func updateExtractionProgressWindowSize(animated: Bool = true) {
+        guard let window = extractionProgressWindowController?.window else { return }
+        let contentSize = NSSize(width: 560, height: extractionProgressWindowHeight)
+        var frame = window.frame
+        let delta = contentSize.height - window.contentLayoutRect.height
+        frame.origin.y -= delta
+        frame.size.height += delta
+
+        if animated {
+            window.animator().setFrame(frame, display: true)
+        } else {
+            window.setContentSize(contentSize)
+        }
+    }
+
+    private func closePrimaryAppWindows() {
+        let progressWindow = extractionProgressWindowController?.window
+        for window in NSApp.windows where window !== progressWindow && !window.isSheet {
+            window.close()
+        }
     }
 
     private func processNextExtractionJob() {
@@ -239,6 +277,7 @@ final class ArchiveWorkspaceStore: ObservableObject {
             } catch {
                 job.state = .failed(error.localizedDescription)
                 isProcessingExtractionQueue = false
+                finishTransientExtractionSessionIfNeeded()
                 processNextExtractionJob()
             }
         }
@@ -270,7 +309,32 @@ final class ArchiveWorkspaceStore: ObservableObject {
                 job.state = .failed(error.localizedDescription)
             }
             isProcessingExtractionQueue = false
+            updateExtractionProgressWindowSize()
+            finishTransientExtractionSessionIfNeeded()
             processNextExtractionJob()
+        }
+    }
+
+    private func finishTransientExtractionSessionIfNeeded() {
+        guard isTransientExtractionSession,
+              !isProcessingExtractionQueue,
+              !isExtractingArchives,
+              !extractionJobs.isEmpty else { return }
+
+        let completedSuccessfully = extractionJobs.allSatisfy { $0.state == .done }
+        guard completedSuccessfully else { return }
+
+        isTransientExtractionSession = false
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            guard let self,
+                  !self.isExtractingArchives,
+                  self.extractionJobs.allSatisfy({ $0.state == .done }) else { return }
+
+            self.extractionJobs.removeAll()
+            self.extractionProgressWindowController?.close()
+            self.extractionProgressWindowController = nil
+            NSApp.terminate(nil)
         }
     }
 
